@@ -1,6 +1,5 @@
 const express = require("express");
 
-
 const app = express();
 app.use(express.json());
 
@@ -17,6 +16,24 @@ function assertEnv() {
   if (!process.env.SUMMIT_COMPANY_ID || !process.env.SUMMIT_API_KEY) {
     throw new Error("Missing Summit credentials in env variables");
   }
+}
+
+/* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
+
+function unwrapSummit(response) {
+  if (!response || !response.Status) {
+    throw new Error("Invalid response from Summit");
+  }
+
+  if (response.Status !== "Success") {
+    throw new Error(
+      response.UserErrorMessage ||
+      response.TechnicalErrorDetails ||
+      "Summit returned an error"
+    );
+  }
+
+  return response.Data || {};
 }
 
 /* ---------------- SUMMIT: CUSTOMER ---------------- */
@@ -47,9 +64,7 @@ async function createOrGetCustomer(saved) {
   const summit = unwrapSummit(await res.json());
 
   if (!summit.CustomerID) {
-    throw new Error(
-      summit.UserErrorMessage || "Failed to create or fetch customer"
-    );
+    throw new Error("Failed to create or fetch customer");
   }
 
   return summit.CustomerID;
@@ -79,7 +94,7 @@ async function createInvoiceAndReceipt({
         Quantity: 1,
         UnitPrice: amount,
         TotalPrice: amount,
-        Item: { Name: "Registration" }
+        Item: { Name: "מוצר לדוגמה" }
       }
     ],
     Payments: [
@@ -111,19 +126,17 @@ async function createInvoiceAndReceipt({
   const summit = unwrapSummit(await res.json());
 
   if (!summit.DocumentID) {
-    throw new Error(
-      summit.UserErrorMessage || "Failed to create document"
-    );
+    throw new Error("Failed to create document");
   }
 
   return summit;
 }
 
-/* ---------------- WEBHOOK / API ENTRY ---------------- */
+/* ---------------- API ENTRY ---------------- */
 
 app.post("/summit", async (req, res) => {
   try {
-    const saved = req.body.saved;   // your data source
+    const saved = req.body.saved;
     const amount = req.body.amount;
     const regId = req.body.regId;
     const last4 = req.body.last4;
