@@ -21,11 +21,12 @@ function assertEnv() {
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
 
 function unwrapSummit(response) {
-  if (!response || !response.Status) {
+  if (!response || response.Status === undefined) {
     throw new Error("Invalid response from Summit");
   }
 
-  if (response.Status !== "Success") {
+  // Success = 0
+  if (response.Status !== 0) {
     throw new Error(
       response.UserErrorMessage ||
       response.TechnicalErrorDetails ||
@@ -35,6 +36,7 @@ function unwrapSummit(response) {
 
   return response.Data || {};
 }
+
 
 /* ---------------- SUMMIT: CUSTOMER ---------------- */
 
