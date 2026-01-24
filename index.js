@@ -61,7 +61,20 @@ async function createOrGetCustomer(saved) {
     }
   );
 
-  const summit = unwrapSummit(await res.json());
+const rawText = await res.text();
+console.log("SUMMIT RAW RESPONSE:", rawText);
+
+let parsed;
+try {
+  parsed = JSON.parse(rawText);
+} catch (e) {
+  console.error("SUMMIT RESPONSE IS NOT JSON");
+  throw new Error("Invalid response from Summit");
+}
+
+const summit = unwrapSummit(parsed);
+
+  //const summit = unwrapSummit(await res.json());
 
   if (!summit.CustomerID) {
     throw new Error("Failed to create or fetch customer");
