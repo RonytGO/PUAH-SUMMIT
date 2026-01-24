@@ -5,17 +5,17 @@ app.use(express.json());
 
 /* ---------------- HELPERS ---------------- */
 
-function normalizePhone(phone) {
-  if (!phone) {
-    throw new Error("CustomerPhone is required");
-  }
-  return phone.replace(/\D/g, "");
-}
-
 function assertEnv() {
   if (!process.env.SUMMIT_COMPANY_ID || !process.env.SUMMIT_API_KEY) {
     throw new Error("Missing Summit credentials in env variables");
   }
+}
+
+function getCustomerExternalIdentifier(saved) {
+  if (!saved || !saved.customerexternalidentifier) {
+    throw new Error("customerexternalidentifier is required");
+  }
+  return String(saved.customerexternalidentifier);
 }
 
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
@@ -41,7 +41,6 @@ function unwrapSummit(response) {
 
 async function createInvoiceAndReceipt({
   saved,
-  regId,
   amount,
   last4,
   payments,
@@ -53,19 +52,21 @@ async function createInvoiceAndReceipt({
     throw new Error("SKU is required");
   }
 
-  const phone = normalizePhone(saved.CustomerPhone);
+  if (!amount) {
+    throw new Error("amount is required for payment");
+  }
+
+  const customerExternalId = getCustomerExternalIdentifier(saved);
 
   const payload = {
     Details: {
       Type: 1, // InvoiceAndReceipt
       Date: new Date().toISOString(),
-      ExternalReference: regId,
       Original: true,
 
       Customer: {
+        ExternalIdentifier: customerExternalId,
         Name: saved.CustomerName || "Client",
-        Phone: phone,
-        ExternalIdentifier: phone,
         SearchMode: 2 // ExternalIdentifier
       }
     },
@@ -73,8 +74,6 @@ async function createInvoiceAndReceipt({
     Items: [
       {
         Quantity: 1,
-        UnitPrice: amount,
-        TotalPrice: amount,
         Item: {
           SKU: String(sku),
           SearchMode: 4 // SKU
@@ -123,16 +122,16 @@ async function createInvoiceAndReceipt({
 
 app.post("/summit", async (req, res) => {
   try {
-    const saved = req.body.saved;
-    const amount = req.body.amount;
-    const regId = req.body.regId;
-    const last4 = req.body.last4;
-    const payments = req.body.payments || 1;
-    const sku = req.body.sku;
+    const {
+      saved,
+      amount,
+      last4,
+      payments = 1,
+      sku
+    } = req.body;
 
     const document = await createInvoiceAndReceipt({
       saved,
-      regId,
       amount,
       last4,
       payments,
