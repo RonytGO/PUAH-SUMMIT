@@ -44,9 +44,14 @@ async function createInvoiceAndReceipt({
   regId,
   amount,
   last4,
-  payments
+  payments,
+  sku
 }) {
   assertEnv();
+
+  if (!sku) {
+    throw new Error("SKU is required");
+  }
 
   const phone = normalizePhone(saved.CustomerPhone);
 
@@ -70,7 +75,10 @@ async function createInvoiceAndReceipt({
         Quantity: 1,
         UnitPrice: amount,
         TotalPrice: amount,
-        Item: { Name: "מוצר לדוגמה" }
+        Item: {
+          SKU: String(sku),
+          SearchMode: 4 // SKU
+        }
       }
     ],
 
@@ -120,13 +128,15 @@ app.post("/summit", async (req, res) => {
     const regId = req.body.regId;
     const last4 = req.body.last4;
     const payments = req.body.payments || 1;
+    const sku = req.body.sku;
 
     const document = await createInvoiceAndReceipt({
       saved,
       regId,
       amount,
       last4,
-      payments
+      payments,
+      sku
     });
 
     res.json({
@@ -136,7 +146,7 @@ app.post("/summit", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Summit error:", err);
+    console.error("Summit error:", err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
