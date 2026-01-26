@@ -71,7 +71,7 @@ async function createInvoiceAndReceipt({
       Type: 1, // InvoiceAndReceipt
       Date: new Date().toISOString(),
       Original: true,
-      Description: "השגחה בטיפול פוריות",
+      IsDraft: false,
 
       Customer: {
         ExternalIdentifier: customerExternalId,
@@ -86,7 +86,8 @@ async function createInvoiceAndReceipt({
         Quantity: 1,
         Item: {
           SKU: String(sku),
-          SearchMode: 4 // SKU
+          SearchMode: 4 // SKU,
+          Description: "השגחה בטיפול פוריות"
         }
       }
     ],
