@@ -25,7 +25,6 @@ function getPersonId(saved) {
   return String(saved.personid);
 }
 
-
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
 
 function unwrapSummit(response) {
@@ -45,6 +44,7 @@ function unwrapSummit(response) {
 }
 
 /* ---------------- SUMMIT: DOCUMENT ---------------- */
+
 async function createInvoiceAndReceipt({
   saved,
   amount,
@@ -53,75 +53,78 @@ async function createInvoiceAndReceipt({
   sku,
   hospital
 }) {
-  
   assertEnv();
 
-  if (!sku) {
-    throw new Error("SKU Item is required");
-  }
-
-  if (!amount) {
-    throw new Error("amount is required for payment");
-  }
+  if (!sku) throw new Error("SKU Item is required");
+  if (!amount) throw new Error("amount is required for payment");
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString("he-IL");
   const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital}`;
 
-
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
 
-const payload = {
-  Details: {
-    Type: 1, // InvoiceAndReceipt
-    Date: new Date().toISOString(),
-    Original: true,
-    IsDraft: false,
-
-    Customer: {
-      ExternalIdentifier: customerExternalId,
-      CompanyNumber: personId,
-      Name: saved.CustomerName || "Client",
-      Phone: saved.CustomerPhone || null,
-      EmailAddress: saved.CustomerEmail || null,
-      SearchMode: 2
-    }
-  },
-
-  Items: [
-  {
-    Quantity: 1,
-    UnitPrice: amount,
-    TotalPrice: amount,
-    Description: itemDescription,
-    Item: {
-      SKU: String(sku),
-      SearchMode: 4
-    }
-  }
-],
+  /* ---- credit card details ---- */
 
   const creditCardDetails = {
-  Last4Digits: last4 ? String(last4) : null,
-  Payments: payments
-};
+    Last4Digits: last4 ? String(last4) : null,
+    Payments: payments
+  };
 
-if (payments === 1) {
-  creditCardDetails.FirstPayment = amount;
-} else {
-  creditCardDetails.FirstPayment = amount / payments;
-  creditCardDetails.EachPayment = amount / payments;
-},
-
-  VATIncluded: true,
-
-  Credentials: {
-    CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
-    APIKey: process.env.SUMMIT_API_KEY
+  if (payments === 1) {
+    creditCardDetails.FirstPayment = amount;
+  } else {
+    creditCardDetails.FirstPayment = amount / payments;
+    creditCardDetails.EachPayment = amount / payments;
   }
-};
 
+  /* ---- payload ---- */
+
+  const payload = {
+    Details: {
+      Type: 1,
+      Date: new Date().toISOString(),
+      Original: true,
+      IsDraft: false,
+      Customer: {
+        ExternalIdentifier: customerExternalId,
+        CompanyNumber: personId,
+        Name: saved.CustomerName || "Client",
+        Phone: saved.CustomerPhone || null,
+        EmailAddress: saved.CustomerEmail || null,
+        SearchMode: 2
+      }
+    },
+
+    Items: [
+      {
+        Quantity: 1,
+        UnitPrice: amount,
+        TotalPrice: amount,
+        Description: itemDescription,
+        Item: {
+          SKU: String(sku),
+          SearchMode: 4
+        }
+      }
+    ],
+
+    Payments: [
+      {
+        Amount: amount,
+        Type: 5,
+        Details_CreditCard: creditCardDetails
+      }
+    ],
+
+    VATIncluded: true,
+
+    Credentials: {
+      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
+      APIKey: process.env.SUMMIT_API_KEY
+    }
+  };
 
   const res = await fetch(
     "https://app.sumit.co.il/accounting/documents/create/",
@@ -141,7 +144,7 @@ if (payments === 1) {
   return summit;
 }
 
-/* ---------------- API ENTRY ---------------- */
+/* ---------------- API ENTRY (POST – API usage) ---------------- */
 
 app.post("/summit", async (req, res) => {
   try {
@@ -175,11 +178,12 @@ app.post("/summit", async (req, res) => {
   }
 });
 
-/* ---------------- SALESFORCE BUTTON (GET PROXY) ---------------- */
+/* ---------------- SALESFORCE BUTTON (GET + REDIRECT) ---------------- */
 
 app.get("/summit-from-sf", async (req, res) => {
   try {
     const {
+      paymentId,
       familyid,
       personid,
       customername,
@@ -192,21 +196,12 @@ app.get("/summit-from-sf", async (req, res) => {
       payments
     } = req.query;
 
-    if (!familyid) {
-      throw new Error("familyid is required");
-    }
-    if (!personid) {
-      throw new Error("personid is required");
-    }
-    if (!amount) {
-      throw new Error("amount is required");
-    }
-    if (!hospital) {
-      throw new Error("hospital is required");
-    }
-    if (!sku) {
-      throw new Error("sku is required");
-    }
+    if (!paymentId) throw new Error("paymentId is required");
+    if (!familyid) throw new Error("familyid is required");
+    if (!personid) throw new Error("personid is required");
+    if (!amount) throw new Error("amount is required");
+    if (!hospital) throw new Error("hospital is required");
+    if (!sku) throw new Error("sku is required");
 
     const saved = {
       customerexternalidentifier: familyid,
@@ -225,18 +220,17 @@ app.get("/summit-from-sf", async (req, res) => {
       hospital
     });
 
-    res.json({
-      ok: true,
-      documentId: document.DocumentID,
-      receiptUrl: document.DocumentDownloadURL
-    });
+    /* ---- redirect back to Salesforce Flow ---- */
+
+    res.redirect(
+      `https://puah.lightning.force.com/flow/SaveReceipt` +
+      `?recordId=${paymentId}` +
+      `&receiptUrl=${encodeURIComponent(document.DocumentDownloadURL)}`
+    );
 
   } catch (err) {
     console.error("SF GET Summit error:", err.message);
-    res.status(500).json({
-      ok: false,
-      error: err.message
-    });
+    res.status(500).send(err.message);
   }
 });
 
