@@ -65,7 +65,7 @@ async function createInvoiceAndReceipt({
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
 
-  /* ---- credit card details ---- */
+  /* ---------- CREDIT CARD DETAILS ---------- */
 
   const creditCardDetails = {
     Last4Digits: last4 ? String(last4) : null,
@@ -79,7 +79,7 @@ async function createInvoiceAndReceipt({
     creditCardDetails.EachPayment = amount / payments;
   }
 
-  /* ---- payload ---- */
+  /* ---------- PAYLOAD ---------- */
 
   const payload = {
     Details: {
@@ -144,7 +144,7 @@ async function createInvoiceAndReceipt({
   return summit;
 }
 
-/* ---------------- API ENTRY (POST – API usage) ---------------- */
+/* ---------------- API ENTRY (POST) ---------------- */
 
 app.post("/summit", async (req, res) => {
   try {
@@ -219,8 +219,6 @@ app.get("/summit-from-sf", async (req, res) => {
       sku,
       hospital
     });
-
-    /* ---- redirect back to Salesforce Flow ---- */
 
     res.redirect(
       `https://puah.lightning.force.com/flow/SaveReceipt` +
