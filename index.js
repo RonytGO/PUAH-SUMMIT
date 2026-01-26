@@ -56,7 +56,7 @@ async function createInvoiceAndReceipt({
   assertEnv();
 
   if (!sku) {
-    throw new Error("SKU is required");
+    throw new Error("SKU Item is required");
   }
 
   if (!amount) {
@@ -75,21 +75,20 @@ async function createInvoiceAndReceipt({
 
       Customer: {
         ExternalIdentifier: customerExternalId,
-        CompanyNumber: String(saved.personid).replace(/\s+/g, ""),
+        CompanyNumber: personId,
         Name: saved.CustomerName || "Client",
         SearchMode: 2               // ExternalIdentifier
       }
     },
 
-    Items: [
-      {
-        Quantity: 1,
-        Item: {
-          SKU: String(sku),
-          SearchMode: 4 // SKU,
-          Description: "השגחה בטיפול פוריות"
-        }
+    Items: [{
+    Quantity: 1,
+    Item: {
+      SKU: String(sku),
+      SearchMode: 4,
+      Description: "השגחה בטיפול פוריות"
       }
+     }
     ],
 
     Payments: [
