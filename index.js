@@ -22,9 +22,9 @@ function getPersonId(saved) {
   if (!saved || !saved.personid) {
     throw new Error("personid is required");
   }
-  // מסיר רווחים – Summit מצפה למספר רציף
-  return String(saved.personid).replace(/\s+/g, "");
+  return String(saved.personid);
 }
+
 
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
 
@@ -102,16 +102,17 @@ const payload = {
   }
 ],
 
-  Payments: [
-    {
-      Amount: amount,
-      Type: 5,
-      Details_CreditCard: {
-        Last4Digits: last4,
-        Payments: payments
-      }
-    }
-  ],
+  const creditCardDetails = {
+  Last4Digits: last4 ? String(last4) : null,
+  Payments: payments
+};
+
+if (payments === 1) {
+  creditCardDetails.FirstPayment = amount;
+} else {
+  creditCardDetails.FirstPayment = amount / payments;
+  creditCardDetails.EachPayment = amount / payments;
+},
 
   VATIncluded: true,
 
