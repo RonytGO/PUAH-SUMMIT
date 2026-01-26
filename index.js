@@ -66,49 +66,53 @@ async function createInvoiceAndReceipt({
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
 
-  const payload = {
-    Details: {
-      Type: 1, // InvoiceAndReceipt
-      Date: new Date().toISOString(),
-      Original: true,
-      IsDraft: false,
+const payload = {
+  Details: {
+    Type: 1, // InvoiceAndReceipt
+    Date: new Date().toISOString(),
+    Original: true,
+    IsDraft: false,
 
-      Customer: {
-        ExternalIdentifier: customerExternalId,
-        CompanyNumber: personId,
-        Name: saved.CustomerName || "Client",
-        SearchMode: 2               // ExternalIdentifier
-      }
-    },
-
-    Items: [{
-    Quantity: 1,
-    Item: {
-      SKU: String(sku),
-      SearchMode: 4,
-      Description: "השגחה בטיפול פוריות"
-      }
-     }
-    ],
-
-    Payments: [
-      {
-        Amount: amount,
-        Type: 5,
-        Details_CreditCard: {
-          Last4Digits: last4,
-          Payments: payments
-        }
-      }
-    ],
-
-    VATIncluded: true,
-
-    Credentials: {
-      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
-      APIKey: process.env.SUMMIT_API_KEY
+    Customer: {
+      ExternalIdentifier: customerExternalId,
+      CompanyNumber: personId,
+      Name: saved.CustomerName || "Client",
+      SearchMode: 2
     }
-  };
+  },
+
+  Items: [
+    {
+      Quantity: 1,
+      UnitPrice: amount,
+      TotalPrice: amount,
+      Item: {
+        SKU: String(sku),
+        SearchMode: 4,
+        Description: "השגחה בטיפול פוריות"
+      }
+    }
+  ],
+
+  Payments: [
+    {
+      Amount: amount,
+      Type: 5,
+      Details_CreditCard: {
+        Last4Digits: last4,
+        Payments: payments
+      }
+    }
+  ],
+
+  VATIncluded: true,
+
+  Credentials: {
+    CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
+    APIKey: process.env.SUMMIT_API_KEY
+  }
+};
+
 
   const res = await fetch(
     "https://app.sumit.co.il/accounting/documents/create/",
