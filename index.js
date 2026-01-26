@@ -71,6 +71,7 @@ async function createInvoiceAndReceipt({
       Type: 1, // InvoiceAndReceipt
       Date: new Date().toISOString(),
       Original: true,
+      Description: "השגחה בטיפול פוריות",
 
       Customer: {
         ExternalIdentifier: customerExternalId,
