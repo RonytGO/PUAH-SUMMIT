@@ -75,7 +75,7 @@ async function createInvoiceAndReceipt({
 
       Customer: {
         ExternalIdentifier: customerExternalId,
-        ID: personId,               // <<< זה השדה החשוב
+        CompanyNumber: String(saved.personid).replace(/\s+/g, ""),
         Name: saved.CustomerName || "Client",
         SearchMode: 2               // ExternalIdentifier
       }
