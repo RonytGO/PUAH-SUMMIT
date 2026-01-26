@@ -45,14 +45,15 @@ function unwrapSummit(response) {
 }
 
 /* ---------------- SUMMIT: DOCUMENT ---------------- */
-
 async function createInvoiceAndReceipt({
   saved,
   amount,
   last4,
   payments,
-  sku
+  sku,
+  hospital
 }) {
+  
   assertEnv();
 
   if (!sku) {
@@ -82,6 +83,8 @@ const payload = {
       ExternalIdentifier: customerExternalId,
       CompanyNumber: personId,
       Name: saved.CustomerName || "Client",
+      Phone: saved.CustomerPhone || null,
+      EmailAddress: saved.CustomerEmail || null,
       SearchMode: 2
     }
   },
@@ -155,7 +158,8 @@ app.post("/summit", async (req, res) => {
       amount,
       last4,
       payments,
-      sku
+      sku,
+      hospital
     });
 
     res.json({
