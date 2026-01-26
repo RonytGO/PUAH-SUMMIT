@@ -82,17 +82,17 @@ const payload = {
   },
 
   Items: [
-    {
-      Quantity: 1,
-      UnitPrice: amount,
-      TotalPrice: amount,
-      Item: {
-        SKU: String(sku),
-        SearchMode: 4,
-        Description: "השגחה בטיפול פוריות"
-      }
+  {
+    Quantity: 1,
+    UnitPrice: amount,
+    TotalPrice: amount,
+    Description: "השגחה בטיפול פוריות",
+    Item: {
+      SKU: String(sku),
+      SearchMode: 4
     }
-  ],
+  }
+],
 
   Payments: [
     {
