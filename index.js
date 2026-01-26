@@ -174,6 +174,71 @@ app.post("/summit", async (req, res) => {
   }
 });
 
+/* ---------------- SALESFORCE BUTTON (GET PROXY) ---------------- */
+
+app.get("/summit-from-sf", async (req, res) => {
+  try {
+    const {
+      familyid,
+      personid,
+      customername,
+      customerphone,
+      customeremail,
+      amount,
+      hospital,
+      sku,
+      last4,
+      payments
+    } = req.query;
+
+    if (!familyid) {
+      throw new Error("familyid is required");
+    }
+    if (!personid) {
+      throw new Error("personid is required");
+    }
+    if (!amount) {
+      throw new Error("amount is required");
+    }
+    if (!hospital) {
+      throw new Error("hospital is required");
+    }
+    if (!sku) {
+      throw new Error("sku is required");
+    }
+
+    const saved = {
+      customerexternalidentifier: familyid,
+      personid: personid,
+      CustomerName: customername || "Client",
+      CustomerPhone: customerphone || null,
+      CustomerEmail: customeremail || null
+    };
+
+    const document = await createInvoiceAndReceipt({
+      saved,
+      amount: Number(amount),
+      last4: last4 || null,
+      payments: payments ? Number(payments) : 1,
+      sku,
+      hospital
+    });
+
+    res.json({
+      ok: true,
+      documentId: document.DocumentID,
+      receiptUrl: document.DocumentDownloadURL
+    });
+
+  } catch (err) {
+    console.error("SF GET Summit error:", err.message);
+    res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
 /* ---------------- SERVER ---------------- */
 
 const PORT = process.env.PORT || 8080;
