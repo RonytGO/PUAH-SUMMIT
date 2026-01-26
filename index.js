@@ -63,6 +63,11 @@ async function createInvoiceAndReceipt({
     throw new Error("amount is required for payment");
   }
 
+  const today = new Date();
+  const formattedDate = today.toLocaleDateString("he-IL");
+  const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital}`;
+
+
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
 
@@ -86,7 +91,7 @@ const payload = {
     Quantity: 1,
     UnitPrice: amount,
     TotalPrice: amount,
-    Description: "השגחה בטיפול פוריות",
+    Description: itemDescription,
     Item: {
       SKU: String(sku),
       SearchMode: 4
@@ -141,7 +146,8 @@ app.post("/summit", async (req, res) => {
       amount,
       last4,
       payments = 1,
-      sku
+      sku,
+      hospital
     } = req.body;
 
     const document = await createInvoiceAndReceipt({
