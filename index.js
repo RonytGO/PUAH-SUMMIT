@@ -18,6 +18,14 @@ function getCustomerExternalIdentifier(saved) {
   return String(saved.customerexternalidentifier);
 }
 
+function getPersonId(saved) {
+  if (!saved || !saved.personid) {
+    throw new Error("personid is required");
+  }
+  // מסיר רווחים – Summit מצפה למספר רציף
+  return String(saved.personid).replace(/\s+/g, "");
+}
+
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
 
 function unwrapSummit(response) {
@@ -25,7 +33,6 @@ function unwrapSummit(response) {
     throw new Error("Invalid response from Summit");
   }
 
-  // Success = 0
   if (response.Status !== 0) {
     throw new Error(
       response.UserErrorMessage ||
@@ -57,6 +64,7 @@ async function createInvoiceAndReceipt({
   }
 
   const customerExternalId = getCustomerExternalIdentifier(saved);
+  const personId = getPersonId(saved);
 
   const payload = {
     Details: {
@@ -66,8 +74,9 @@ async function createInvoiceAndReceipt({
 
       Customer: {
         ExternalIdentifier: customerExternalId,
+        ID: personId,               // <<< זה השדה החשוב
         Name: saved.CustomerName || "Client",
-        SearchMode: 2 // ExternalIdentifier
+        SearchMode: 2               // ExternalIdentifier
       }
     },
 
