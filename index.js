@@ -104,7 +104,7 @@ async function createInvoiceAndReceipt({
   const payload = {
     Details: {
       Type: 1,
-      Date: careDate.toISOString(),
+      Date: new Date().toISOString(),
       Original: true,
       IsDraft: false,
       Customer: {
