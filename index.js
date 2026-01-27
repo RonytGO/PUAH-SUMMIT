@@ -51,19 +51,39 @@ async function createInvoiceAndReceipt({
   last4,
   payments,
   sku,
-  hospital
+  hospital,
+  datecare
 }) {
   assertEnv();
 
   if (!sku) throw new Error("SKU Item is required");
   if (!amount) throw new Error("amount is required for payment");
 
-  const today = new Date();
-  const formattedDate = today.toLocaleDateString("he-IL");
+  /* ---------- CARE DATE ---------- */
+
+  let careDate;
+
+  if (datecare) {
+    // expected format: YYYY-MM-DD
+    careDate = new Date(datecare);
+  } else {
+    careDate = new Date();
+  }
+
+  if (isNaN(careDate.getTime())) {
+    throw new Error("Invalid datecare value");
+  }
+
+  const formattedDate = careDate.toLocaleDateString("he-IL");
   const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital}`;
 
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
+
+  const customerNameNormalized =
+    saved.CustomerName && saved.CustomerName.trim() !== ""
+      ? saved.CustomerName.trim()
+      : null;
 
   /* ---------- CREDIT CARD DETAILS ---------- */
 
@@ -84,13 +104,13 @@ async function createInvoiceAndReceipt({
   const payload = {
     Details: {
       Type: 1,
-      Date: new Date().toISOString(),
+      Date: careDate.toISOString(),
       Original: true,
       IsDraft: false,
       Customer: {
         ExternalIdentifier: customerExternalId,
         CompanyNumber: personId,
-        Name: saved.CustomerName || "Client",
+        Name: customerNameNormalized || "Client",
         Phone: saved.CustomerPhone || null,
         EmailAddress: saved.CustomerEmail || null,
         SearchMode: 2
@@ -154,7 +174,8 @@ app.post("/summit", async (req, res) => {
       last4,
       payments = 1,
       sku,
-      hospital
+      hospital,
+      datecare
     } = req.body;
 
     const document = await createInvoiceAndReceipt({
@@ -163,7 +184,8 @@ app.post("/summit", async (req, res) => {
       last4,
       payments,
       sku,
-      hospital
+      hospital,
+      datecare
     });
 
     res.json({
@@ -193,7 +215,8 @@ app.get("/summit-from-sf", async (req, res) => {
       hospital,
       sku,
       last4,
-      payments
+      payments,
+      datecare
     } = req.query;
 
     if (!paymentId) throw new Error("paymentId is required");
@@ -206,7 +229,7 @@ app.get("/summit-from-sf", async (req, res) => {
     const saved = {
       customerexternalidentifier: familyid,
       personid: personid,
-      CustomerName: customername || "Client",
+      CustomerName: customername,
       CustomerPhone: customerphone || null,
       CustomerEmail: customeremail || null
     };
@@ -217,7 +240,8 @@ app.get("/summit-from-sf", async (req, res) => {
       last4: last4 || null,
       payments: payments ? Number(payments) : 1,
       sku,
-      hospital
+      hospital,
+      datecare
     });
 
     res.redirect(
