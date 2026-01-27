@@ -124,8 +124,8 @@ async function createInvoiceAndReceipt({
         TotalPrice: amount,
         Description: itemDescription,
         Item: {
-          SKU: String(sku),
-          SearchMode: 4
+          ExternalIdentifier: String(sku),
+          SearchMode: 2
         }
       }
     ],
