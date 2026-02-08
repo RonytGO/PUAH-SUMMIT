@@ -154,10 +154,6 @@ async function createInvoiceAndReceipt({
 
   if (paymentMethod === "bank") {
 
-    if (!accountNumber) {
-      throw new Error("Account number is required for bank transfer");
-    }
-
     paymentObject = {
       Amount: amount,
       Type: 3,
