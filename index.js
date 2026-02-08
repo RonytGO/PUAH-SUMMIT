@@ -25,6 +25,31 @@ function getPersonId(saved) {
   return String(saved.personid);
 }
 
+function normalizeAmount(rawAmount) {
+  if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
+    throw new Error("amount is required");
+  }
+
+  const cleaned = String(rawAmount).replace(/[^\d.]/g, "");
+  const amount = Number(cleaned);
+
+  if (!amount || isNaN(amount) || amount <= 0) {
+    throw new Error("amount is invalid");
+  }
+
+  return amount;
+}
+
+function normalizePayments(rawPayments) {
+  const payments = Number(rawPayments);
+
+  if (!payments || isNaN(payments) || payments < 1) {
+    return 1;
+  }
+
+  return payments;
+}
+
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
 
 function unwrapSummit(response) {
@@ -57,14 +82,15 @@ async function createInvoiceAndReceipt({
   assertEnv();
 
   if (!sku) throw new Error("SKU Item is required");
-  if (!amount) throw new Error("amount is required for payment");
+  if (amount === undefined || isNaN(amount) || amount <= 0) {
+    throw new Error("amount is invalid");
+  }
 
   /* ---------- CARE DATE ---------- */
 
   let careDate;
 
   if (datecare) {
-    // expected format: YYYY-MM-DD
     careDate = new Date(datecare);
   } else {
     careDate = new Date();
@@ -75,7 +101,7 @@ async function createInvoiceAndReceipt({
   }
 
   const formattedDate = careDate.toLocaleDateString("he-IL");
-  const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital}`;
+  const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital || ""}`.trim();
 
   const customerExternalId = getCustomerExternalIdentifier(saved);
   const personId = getPersonId(saved);
@@ -83,9 +109,11 @@ async function createInvoiceAndReceipt({
   const customerNameNormalized =
     saved.CustomerName && saved.CustomerName.trim() !== ""
       ? saved.CustomerName.trim()
-      : null;
+      : "Client";
 
   /* ---------- CREDIT CARD DETAILS ---------- */
+
+  payments = normalizePayments(payments);
 
   const creditCardDetails = {
     Last4Digits: last4 ? String(last4) : null,
@@ -95,8 +123,9 @@ async function createInvoiceAndReceipt({
   if (payments === 1) {
     creditCardDetails.FirstPayment = amount;
   } else {
-    creditCardDetails.FirstPayment = amount / payments;
-    creditCardDetails.EachPayment = amount / payments;
+    const installment = amount / payments;
+    creditCardDetails.FirstPayment = installment;
+    creditCardDetails.EachPayment = installment;
   }
 
   /* ---------- PAYLOAD ---------- */
@@ -110,7 +139,7 @@ async function createInvoiceAndReceipt({
       Customer: {
         ExternalIdentifier: customerExternalId,
         CompanyNumber: personId,
-        Name: customerNameNormalized || "Client",
+        Name: customerNameNormalized,
         Phone: saved.CustomerPhone || null,
         EmailAddress: saved.CustomerEmail || null,
         SearchMode: 2
@@ -146,7 +175,7 @@ async function createInvoiceAndReceipt({
     }
   };
 
-  const res = await fetch(
+  const response = await fetch(
     "https://app.sumit.co.il/accounting/documents/create/",
     {
       method: "POST",
@@ -155,7 +184,7 @@ async function createInvoiceAndReceipt({
     }
   );
 
-  const summit = unwrapSummit(await res.json());
+  const summit = unwrapSummit(await response.json());
 
   if (!summit.DocumentID) {
     throw new Error("Failed to create document");
@@ -172,17 +201,20 @@ app.post("/summit", async (req, res) => {
       saved,
       amount,
       last4,
-      payments = 1,
+      payments,
       sku,
       hospital,
       datecare
     } = req.body;
 
+    const normalizedAmount = normalizeAmount(amount);
+    const normalizedPayments = normalizePayments(payments);
+
     const document = await createInvoiceAndReceipt({
       saved,
-      amount,
+      amount: normalizedAmount,
       last4,
-      payments,
+      payments: normalizedPayments,
       sku,
       hospital,
       datecare
@@ -226,6 +258,9 @@ app.get("/summit-from-sf", async (req, res) => {
     if (!hospital) throw new Error("hospital is required");
     if (!sku) throw new Error("sku is required");
 
+    const normalizedAmount = normalizeAmount(amount);
+    const normalizedPayments = normalizePayments(payments);
+
     const saved = {
       customerexternalidentifier: familyid,
       personid: personid,
@@ -236,9 +271,9 @@ app.get("/summit-from-sf", async (req, res) => {
 
     const document = await createInvoiceAndReceipt({
       saved,
-      amount: Number(amount),
+      amount: normalizedAmount,
       last4: last4 || null,
-      payments: payments ? Number(payments) : 1,
+      payments: normalizedPayments,
       sku,
       hospital,
       datecare
