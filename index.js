@@ -42,12 +42,19 @@ function normalizeAmount(rawAmount) {
 
 function normalizePayments(rawPayments) {
   const payments = Number(rawPayments);
-
-  if (!payments || isNaN(payments) || payments < 1) {
-    return 1;
-  }
-
+  if (!payments || isNaN(payments) || payments < 1) return 1;
   return payments;
+}
+
+function normalizePaymentMethod(method) {
+  if (!method) return "credit";
+
+  const m = String(method).trim();
+
+  if (m === "כרטיס אשראי") return "credit";
+  if (m === "מזומן") return "cash";
+
+  throw new Error("Unsupported payment method");
 }
 
 /* ---------------- SUMMIT RESPONSE HANDLER ---------------- */
@@ -77,7 +84,8 @@ async function createInvoiceAndReceipt({
   payments,
   sku,
   hospital,
-  datecare
+  datecare,
+  paymentMethod
 }) {
   assertEnv();
 
@@ -86,15 +94,12 @@ async function createInvoiceAndReceipt({
     throw new Error("amount is invalid");
   }
 
+  paymentMethod = normalizePaymentMethod(paymentMethod);
+  payments = normalizePayments(payments);
+
   /* ---------- CARE DATE ---------- */
 
-  let careDate;
-
-  if (datecare) {
-    careDate = new Date(datecare);
-  } else {
-    careDate = new Date();
-  }
+  let careDate = datecare ? new Date(datecare) : new Date();
 
   if (isNaN(careDate.getTime())) {
     throw new Error("Invalid datecare value");
@@ -111,21 +116,36 @@ async function createInvoiceAndReceipt({
       ? saved.CustomerName.trim()
       : "Client";
 
-  /* ---------- CREDIT CARD DETAILS ---------- */
+  /* ---------- PAYMENT BLOCK ---------- */
 
-  payments = normalizePayments(payments);
+  let paymentObject;
 
-  const creditCardDetails = {
-    Last4Digits: last4 ? String(last4) : null,
-    Payments: payments
-  };
+  if (paymentMethod === "cash") {
+    paymentObject = {
+      Amount: amount,
+      Type: 2
+    };
+  }
 
-  if (payments === 1) {
-    creditCardDetails.FirstPayment = amount;
-  } else {
-    const installment = amount / payments;
-    creditCardDetails.FirstPayment = installment;
-    creditCardDetails.EachPayment = installment;
+  if (paymentMethod === "credit") {
+    const creditCardDetails = {
+      Last4Digits: last4 ? String(last4) : null,
+      Payments: payments
+    };
+
+    if (payments === 1) {
+      creditCardDetails.FirstPayment = amount;
+    } else {
+      const installment = amount / payments;
+      creditCardDetails.FirstPayment = installment;
+      creditCardDetails.EachPayment = installment;
+    }
+
+    paymentObject = {
+      Amount: amount,
+      Type: 5,
+      Details_CreditCard: creditCardDetails
+    };
   }
 
   /* ---------- PAYLOAD ---------- */
@@ -159,13 +179,7 @@ async function createInvoiceAndReceipt({
       }
     ],
 
-    Payments: [
-      {
-        Amount: amount,
-        Type: 5,
-        Details_CreditCard: creditCardDetails
-      }
-    ],
+    Payments: [paymentObject],
 
     VATIncluded: true,
 
@@ -204,20 +218,21 @@ app.post("/summit", async (req, res) => {
       payments,
       sku,
       hospital,
-      datecare
+      datecare,
+      paymentMethod
     } = req.body;
 
     const normalizedAmount = normalizeAmount(amount);
-    const normalizedPayments = normalizePayments(payments);
 
     const document = await createInvoiceAndReceipt({
       saved,
       amount: normalizedAmount,
       last4,
-      payments: normalizedPayments,
+      payments,
       sku,
       hospital,
-      datecare
+      datecare,
+      paymentMethod
     });
 
     res.json({
@@ -248,7 +263,8 @@ app.get("/summit-from-sf", async (req, res) => {
       sku,
       last4,
       payments,
-      datecare
+      datecare,
+      paymentmethod
     } = req.query;
 
     if (!paymentId) throw new Error("paymentId is required");
@@ -259,7 +275,6 @@ app.get("/summit-from-sf", async (req, res) => {
     if (!sku) throw new Error("sku is required");
 
     const normalizedAmount = normalizeAmount(amount);
-    const normalizedPayments = normalizePayments(payments);
 
     const saved = {
       customerexternalidentifier: familyid,
@@ -273,10 +288,11 @@ app.get("/summit-from-sf", async (req, res) => {
       saved,
       amount: normalizedAmount,
       last4: last4 || null,
-      payments: normalizedPayments,
+      payments,
       sku,
       hospital,
-      datecare
+      datecare,
+      paymentMethod: paymentmethod
     });
 
     res.redirect(
