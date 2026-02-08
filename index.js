@@ -53,6 +53,7 @@ function normalizePaymentMethod(method) {
 
   if (m === "כרטיס אשראי") return "credit";
   if (m === "מזומן") return "cash";
+  if (m === "העברה בנקאית") return "bank";
 
   throw new Error("Unsupported payment method");
 }
@@ -85,7 +86,10 @@ async function createInvoiceAndReceipt({
   sku,
   hospital,
   datecare,
-  paymentMethod
+  paymentMethod,
+  bankNumber,
+  branchNumber,
+  accountNumber
 }) {
   assertEnv();
 
@@ -148,6 +152,23 @@ async function createInvoiceAndReceipt({
     };
   }
 
+  if (paymentMethod === "bank") {
+
+    if (!accountNumber) {
+      throw new Error("Account number is required for bank transfer");
+    }
+
+    paymentObject = {
+      Amount: amount,
+      Type: 3,
+      Details_BankTransfer: {
+        BankNumber: bankNumber ? Number(bankNumber) : null,
+        BranchNumber: branchNumber ? Number(branchNumber) : null,
+        AccountNumber: String(accountNumber)
+      }
+    };
+  }
+
   /* ---------- PAYLOAD ---------- */
 
   const payload = {
@@ -207,46 +228,6 @@ async function createInvoiceAndReceipt({
   return summit;
 }
 
-/* ---------------- API ENTRY (POST) ---------------- */
-
-app.post("/summit", async (req, res) => {
-  try {
-    const {
-      saved,
-      amount,
-      last4,
-      payments,
-      sku,
-      hospital,
-      datecare,
-      paymentMethod
-    } = req.body;
-
-    const normalizedAmount = normalizeAmount(amount);
-
-    const document = await createInvoiceAndReceipt({
-      saved,
-      amount: normalizedAmount,
-      last4,
-      payments,
-      sku,
-      hospital,
-      datecare,
-      paymentMethod
-    });
-
-    res.json({
-      ok: true,
-      documentId: document.DocumentID,
-      receiptUrl: document.DocumentDownloadURL
-    });
-
-  } catch (err) {
-    console.error("Summit error:", err.message);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 /* ---------------- SALESFORCE BUTTON (GET + REDIRECT) ---------------- */
 
 app.get("/summit-from-sf", async (req, res) => {
@@ -264,7 +245,10 @@ app.get("/summit-from-sf", async (req, res) => {
       last4,
       payments,
       datecare,
-      paymentmethod
+      paymentmethod,
+      banknumber,
+      branchnumber,
+      accountnumber
     } = req.query;
 
     if (!paymentId) throw new Error("paymentId is required");
@@ -287,12 +271,15 @@ app.get("/summit-from-sf", async (req, res) => {
     const document = await createInvoiceAndReceipt({
       saved,
       amount: normalizedAmount,
-      last4: last4 || null,
+      last4,
       payments,
       sku,
       hospital,
       datecare,
-      paymentMethod: paymentmethod
+      paymentMethod: paymentmethod,
+      bankNumber: banknumber,
+      branchNumber: branchnumber,
+      accountNumber: accountnumber
     });
 
     res.redirect(
