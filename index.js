@@ -153,16 +153,34 @@ async function createInvoiceAndReceipt({
   }
 
   if (paymentMethod === "bank") {
-
     paymentObject = {
       Amount: amount,
       Type: 3,
       Details_BankTransfer: {
         BankNumber: bankNumber ? Number(bankNumber) : null,
         BranchNumber: branchNumber ? Number(branchNumber) : null,
-        AccountNumber: String(accountNumber)
+        AccountNumber: accountNumber ? String(accountNumber) : null
       }
     };
+  }
+
+  /* ---------- CUSTOMER OBJECT (WITH OPTIONAL FIELDS) ---------- */
+
+  const customerObject = {
+    ExternalIdentifier: customerExternalId,
+    CompanyNumber: personId,
+    Name: customerNameNormalized,
+    Phone: saved.CustomerPhone || null,
+    EmailAddress: saved.CustomerEmail || null,
+    SearchMode: 2
+  };
+
+  if (saved.CustomerCity) {
+    customerObject.City = saved.CustomerCity;
+  }
+
+  if (saved.CustomerAddress) {
+    customerObject.Address = saved.CustomerAddress;
   }
 
   /* ---------- PAYLOAD ---------- */
@@ -173,14 +191,7 @@ async function createInvoiceAndReceipt({
       Date: new Date().toISOString(),
       Original: true,
       IsDraft: false,
-      Customer: {
-        ExternalIdentifier: customerExternalId,
-        CompanyNumber: personId,
-        Name: customerNameNormalized,
-        Phone: saved.CustomerPhone || null,
-        EmailAddress: saved.CustomerEmail || null,
-        SearchMode: 2
-      }
+      Customer: customerObject
     },
 
     Items: [
@@ -244,7 +255,9 @@ app.get("/summit-from-sf", async (req, res) => {
       paymentmethod,
       banknumber,
       branchnumber,
-      accountnumber
+      accountnumber,
+      city,
+      address
     } = req.query;
 
     if (!paymentId) throw new Error("paymentId is required");
@@ -261,7 +274,9 @@ app.get("/summit-from-sf", async (req, res) => {
       personid: personid,
       CustomerName: customername,
       CustomerPhone: customerphone || null,
-      CustomerEmail: customeremail || null
+      CustomerEmail: customeremail || null,
+      CustomerCity: city || null,
+      CustomerAddress: address || null
     };
 
     const document = await createInvoiceAndReceipt({
@@ -290,9 +305,4 @@ app.get("/summit-from-sf", async (req, res) => {
   }
 });
 
-/* ---------------- SERVER ---------------- */
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+/* ---------------*
