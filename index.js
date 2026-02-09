@@ -81,25 +81,27 @@ function unwrapSummit(response) {
 async function updateCustomer(saved) {
   assertEnv();
 
+  const details = {
+    ExternalIdentifier: saved.customerexternalidentifier,
+    SearchMode: 2
+  };
+
+  if (saved.CustomerCity) details.City = saved.CustomerCity;
+  if (saved.CustomerAddress) details.Address = saved.CustomerAddress;
+  if (saved.CustomerPhone) details.Phone = saved.CustomerPhone;
+  if (saved.CustomerEmail) details.EmailAddress = saved.CustomerEmail;
+  if (saved.CustomerName) details.Name = saved.CustomerName;
+
   const payload = {
-    Details: {
-      ExternalIdentifier: saved.customerexternalidentifier,
-      SearchMode: 2
-    },
+    Details: details,
     Credentials: {
       CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
       APIKey: process.env.SUMMIT_API_KEY
     }
   };
 
-  if (saved.CustomerCity) payload.Details.City = saved.CustomerCity;
-  if (saved.CustomerAddress) payload.Details.Address = saved.CustomerAddress;
-  if (saved.CustomerPhone) payload.Details.Phone = saved.CustomerPhone;
-  if (saved.CustomerEmail) payload.Details.EmailAddress = saved.CustomerEmail;
-  if (saved.CustomerName) payload.Details.Name = saved.CustomerName;
-
   const res = await fetch(
-    "https://app.sumit.co.il/customers/update/",
+    "https://app.sumit.co.il/accounting/customers/update/",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -123,16 +125,19 @@ async function updateCustomer(saved) {
 async function createCustomer(saved) {
   assertEnv();
 
+  const details = {
+    ExternalIdentifier: saved.customerexternalidentifier,
+    Name: saved.CustomerName || "Client"
+  };
+
+  if (saved.CustomerPhone) details.Phone = saved.CustomerPhone;
+  if (saved.CustomerEmail) details.EmailAddress = saved.CustomerEmail;
+  if (saved.CustomerCity) details.City = saved.CustomerCity;
+  if (saved.CustomerAddress) details.Address = saved.CustomerAddress;
+  if (saved.personid) details.CompanyNumber = saved.personid;
+
   const payload = {
-    Details: {
-      ExternalIdentifier: saved.customerexternalidentifier,
-      Name: saved.CustomerName || "Client",
-      Phone: saved.CustomerPhone || null,
-      EmailAddress: saved.CustomerEmail || null,
-      CompanyNumber: saved.personid || null,
-      City: saved.CustomerCity || null,
-      Address: saved.CustomerAddress || null
-    },
+    Details: details,
     Credentials: {
       CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
       APIKey: process.env.SUMMIT_API_KEY
@@ -140,7 +145,7 @@ async function createCustomer(saved) {
   };
 
   const res = await fetch(
-    "https://app.sumit.co.il/customers/create/",
+    "https://app.sumit.co.il/accounting/customers/create/",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -229,7 +234,11 @@ async function createInvoiceAndReceipt({
     };
   }
 
-  const itemDescription = `השגחה בטיפול פוריות ${hospital || ""}`;
+  const formattedDate = datecare
+    ? new Date(datecare).toLocaleDateString("he-IL")
+    : "";
+
+  const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital || ""}`.trim();
 
   const payload = {
     Details: {
@@ -271,7 +280,13 @@ async function createInvoiceAndReceipt({
     }
   );
 
-  return unwrapSummit(await res.json());
+  const summit = unwrapSummit(await res.json());
+
+  if (!summit.DocumentID) {
+    throw new Error("Failed to create document");
+  }
+
+  return summit;
 }
 
 /* ---------------- ROUTE ---------------- */
