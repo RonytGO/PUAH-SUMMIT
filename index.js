@@ -76,14 +76,14 @@ function unwrapSummit(response) {
   return response.Data || {};
 }
 
-/* ---------------- CUSTOMER MANAGEMENT ---------------- */
+/* ---------------- CUSTOMER UPSERT ---------------- */
 
-async function searchCustomerByExternalId(externalId) {
+async function updateCustomer(saved) {
   assertEnv();
 
   const payload = {
     Details: {
-      ExternalIdentifier: externalId,
+      ExternalIdentifier: saved.customerexternalidentifier,
       SearchMode: 2
     },
     Credentials: {
@@ -92,8 +92,14 @@ async function searchCustomerByExternalId(externalId) {
     }
   };
 
+  if (saved.CustomerCity) payload.Details.City = saved.CustomerCity;
+  if (saved.CustomerAddress) payload.Details.Address = saved.CustomerAddress;
+  if (saved.CustomerPhone) payload.Details.Phone = saved.CustomerPhone;
+  if (saved.CustomerEmail) payload.Details.EmailAddress = saved.CustomerEmail;
+  if (saved.CustomerName) payload.Details.Name = saved.CustomerName;
+
   const res = await fetch(
-    "https://app.sumit.co.il/customers/get/",
+    "https://app.sumit.co.il/customers/update/",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -101,26 +107,32 @@ async function searchCustomerByExternalId(externalId) {
     }
   );
 
-  const data = unwrapSummit(await res.json());
-  return data;
+  const text = await res.text();
+  console.log("SUMMIT UPDATE RESPONSE:", text);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Customer update failed: " + text);
+  }
+
+  unwrapSummit(parsed);
 }
 
 async function createCustomer(saved) {
   assertEnv();
 
-  const customer = {
-    ExternalIdentifier: saved.customerexternalidentifier,
-    Name: saved.CustomerName || "Client",
-    Phone: saved.CustomerPhone || null,
-    EmailAddress: saved.CustomerEmail || null,
-    CompanyNumber: saved.personid || null
-  };
-
-  if (saved.CustomerCity) customer.City = saved.CustomerCity;
-  if (saved.CustomerAddress) customer.Address = saved.CustomerAddress;
-
   const payload = {
-    Details: customer,
+    Details: {
+      ExternalIdentifier: saved.customerexternalidentifier,
+      Name: saved.CustomerName || "Client",
+      Phone: saved.CustomerPhone || null,
+      EmailAddress: saved.CustomerEmail || null,
+      CompanyNumber: saved.personid || null,
+      City: saved.CustomerCity || null,
+      Address: saved.CustomerAddress || null
+    },
     Credentials: {
       CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
       APIKey: process.env.SUMMIT_API_KEY
@@ -136,53 +148,25 @@ async function createCustomer(saved) {
     }
   );
 
-  unwrapSummit(await res.json());
-}
+  const text = await res.text();
+  console.log("SUMMIT CREATE RESPONSE:", text);
 
-async function updateCustomer(saved) {
-  assertEnv();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Customer create failed: " + text);
+  }
 
-  const properties = {};
-  if (saved.CustomerCity) properties.City = saved.CustomerCity;
-  if (saved.CustomerAddress) properties.Address = saved.CustomerAddress;
-
-  if (Object.keys(properties).length === 0) return;
-
-  const payload = {
-    Details: {
-      ExternalIdentifier: saved.customerexternalidentifier,
-      SearchMode: 2,
-      Properties: properties
-    },
-    Credentials: {
-      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
-      APIKey: process.env.SUMMIT_API_KEY
-    }
-  };
-
-  const res = await fetch(
-    "https://app.sumit.co.il/customers/update/",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }
-  );
-
-  unwrapSummit(await res.json());
+  unwrapSummit(parsed);
 }
 
 async function ensureCustomer(saved) {
   try {
-    const existing = await searchCustomerByExternalId(saved.customerexternalidentifier);
-
-    if (!existing || !existing.ID) {
-      await createCustomer(saved);
-    } else {
-      await updateCustomer(saved);
-    }
+    await updateCustomer(saved);
   } catch (err) {
-    console.warn("Customer ensure warning:", err.message);
+    console.log("Update failed, trying create:", err.message);
+    await createCustomer(saved);
   }
 }
 
