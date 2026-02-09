@@ -76,7 +76,117 @@ function unwrapSummit(response) {
   return response.Data || {};
 }
 
-/* ---------------- SUMMIT: DOCUMENT ---------------- */
+/* ---------------- CUSTOMER MANAGEMENT ---------------- */
+
+async function searchCustomerByExternalId(externalId) {
+  assertEnv();
+
+  const payload = {
+    Details: {
+      ExternalIdentifier: externalId,
+      SearchMode: 2
+    },
+    Credentials: {
+      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
+      APIKey: process.env.SUMMIT_API_KEY
+    }
+  };
+
+  const res = await fetch(
+    "https://app.sumit.co.il/customers/get/",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const data = unwrapSummit(await res.json());
+  return data;
+}
+
+async function createCustomer(saved) {
+  assertEnv();
+
+  const customer = {
+    ExternalIdentifier: saved.customerexternalidentifier,
+    Name: saved.CustomerName || "Client",
+    Phone: saved.CustomerPhone || null,
+    EmailAddress: saved.CustomerEmail || null,
+    CompanyNumber: saved.personid || null
+  };
+
+  if (saved.CustomerCity) customer.City = saved.CustomerCity;
+  if (saved.CustomerAddress) customer.Address = saved.CustomerAddress;
+
+  const payload = {
+    Details: customer,
+    Credentials: {
+      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
+      APIKey: process.env.SUMMIT_API_KEY
+    }
+  };
+
+  const res = await fetch(
+    "https://app.sumit.co.il/customers/create/",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  unwrapSummit(await res.json());
+}
+
+async function updateCustomer(saved) {
+  assertEnv();
+
+  const properties = {};
+  if (saved.CustomerCity) properties.City = saved.CustomerCity;
+  if (saved.CustomerAddress) properties.Address = saved.CustomerAddress;
+
+  if (Object.keys(properties).length === 0) return;
+
+  const payload = {
+    Details: {
+      ExternalIdentifier: saved.customerexternalidentifier,
+      SearchMode: 2,
+      Properties: properties
+    },
+    Credentials: {
+      CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
+      APIKey: process.env.SUMMIT_API_KEY
+    }
+  };
+
+  const res = await fetch(
+    "https://app.sumit.co.il/customers/update/",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  unwrapSummit(await res.json());
+}
+
+async function ensureCustomer(saved) {
+  try {
+    const existing = await searchCustomerByExternalId(saved.customerexternalidentifier);
+
+    if (!existing || !existing.ID) {
+      await createCustomer(saved);
+    } else {
+      await updateCustomer(saved);
+    }
+  } catch (err) {
+    console.warn("Customer ensure warning:", err.message);
+  }
+}
+
+/* ---------------- DOCUMENT CREATION ---------------- */
 
 async function createInvoiceAndReceipt({
   saved,
@@ -93,42 +203,13 @@ async function createInvoiceAndReceipt({
 }) {
   assertEnv();
 
-  if (!sku) throw new Error("SKU Item is required");
-  if (amount === undefined || isNaN(amount) || amount <= 0) {
-    throw new Error("amount is invalid");
-  }
-
   paymentMethod = normalizePaymentMethod(paymentMethod);
   payments = normalizePayments(payments);
-
-  /* ---------- CARE DATE ---------- */
-
-  let careDate = datecare ? new Date(datecare) : new Date();
-
-  if (isNaN(careDate.getTime())) {
-    throw new Error("Invalid datecare value");
-  }
-
-  const formattedDate = careDate.toLocaleDateString("he-IL");
-  const itemDescription = `השגחה בטיפול פוריות ${formattedDate} ${hospital || ""}`.trim();
-
-  const customerExternalId = getCustomerExternalIdentifier(saved);
-  const personId = getPersonId(saved);
-
-  const customerNameNormalized =
-    saved.CustomerName && saved.CustomerName.trim() !== ""
-      ? saved.CustomerName.trim()
-      : "Client";
-
-  /* ---------- PAYMENT BLOCK ---------- */
 
   let paymentObject;
 
   if (paymentMethod === "cash") {
-    paymentObject = {
-      Amount: amount,
-      Type: 2
-    };
+    paymentObject = { Amount: amount, Type: 2 };
   }
 
   if (paymentMethod === "credit") {
@@ -164,26 +245,7 @@ async function createInvoiceAndReceipt({
     };
   }
 
-  /* ---------- CUSTOMER OBJECT (WITH OPTIONAL FIELDS) ---------- */
-
-  const customerObject = {
-    ExternalIdentifier: customerExternalId,
-    CompanyNumber: personId,
-    Name: customerNameNormalized,
-    Phone: saved.CustomerPhone || null,
-    EmailAddress: saved.CustomerEmail || null,
-    SearchMode: 2
-  };
-
-  if (saved.CustomerCity) {
-    customerObject.City = saved.CustomerCity;
-  }
-
-  if (saved.CustomerAddress) {
-    customerObject.Address = saved.CustomerAddress;
-  }
-
-  /* ---------- PAYLOAD ---------- */
+  const itemDescription = `השגחה בטיפול פוריות ${hospital || ""}`;
 
   const payload = {
     Details: {
@@ -191,9 +253,11 @@ async function createInvoiceAndReceipt({
       Date: new Date().toISOString(),
       Original: true,
       IsDraft: false,
-      Customer: customerObject
+      Customer: {
+        ExternalIdentifier: saved.customerexternalidentifier,
+        SearchMode: 2
+      }
     },
-
     Items: [
       {
         Quantity: 1,
@@ -206,18 +270,15 @@ async function createInvoiceAndReceipt({
         }
       }
     ],
-
     Payments: [paymentObject],
-
     VATIncluded: true,
-
     Credentials: {
       CompanyID: Number(process.env.SUMMIT_COMPANY_ID),
       APIKey: process.env.SUMMIT_API_KEY
     }
   };
 
-  const response = await fetch(
+  const res = await fetch(
     "https://app.sumit.co.il/accounting/documents/create/",
     {
       method: "POST",
@@ -226,16 +287,10 @@ async function createInvoiceAndReceipt({
     }
   );
 
-  const summit = unwrapSummit(await response.json());
-
-  if (!summit.DocumentID) {
-    throw new Error("Failed to create document");
-  }
-
-  return summit;
+  return unwrapSummit(await res.json());
 }
 
-/* ---------------- SALESFORCE BUTTON (GET + REDIRECT) ---------------- */
+/* ---------------- ROUTE ---------------- */
 
 app.get("/summit-from-sf", async (req, res) => {
   try {
@@ -260,24 +315,19 @@ app.get("/summit-from-sf", async (req, res) => {
       address
     } = req.query;
 
-    if (!paymentId) throw new Error("paymentId is required");
-    if (!familyid) throw new Error("familyid is required");
-    if (!personid) throw new Error("personid is required");
-    if (!amount) throw new Error("amount is required");
-    if (!hospital) throw new Error("hospital is required");
-    if (!sku) throw new Error("sku is required");
-
     const normalizedAmount = normalizeAmount(amount);
 
     const saved = {
       customerexternalidentifier: familyid,
-      personid: personid,
+      personid,
       CustomerName: customername,
-      CustomerPhone: customerphone || null,
-      CustomerEmail: customeremail || null,
-      CustomerCity: city || null,
-      CustomerAddress: address || null
+      CustomerPhone: customerphone,
+      CustomerEmail: customeremail,
+      CustomerCity: city,
+      CustomerAddress: address
     };
+
+    await ensureCustomer(saved);
 
     const document = await createInvoiceAndReceipt({
       saved,
